@@ -101,6 +101,7 @@ to go
       stop
     ]
 end
+;==================================================================================================
 
 to set-target
   ;let creation false
@@ -167,7 +168,7 @@ to drive
 end
 
 to consume
-       set energyLevel energyLevel - .1 ; a retravailler
+       set energyLevel energyLevel - .1 ; @RC TODO simpliste à retravailler
 end
 
 to next-direction
@@ -176,23 +177,23 @@ to next-direction
   set degre 30
   ; on est face à notre destination si il y a une route on la prend
   ; sinon on se remet dans notre direction d'avant et une cherche à continuer notre route
-                       if who = g_watchACar [set size 3 set color green ask my-links [set hidden? false] print "" type "***" type who type ": "] ; @RC DEBUG
+                       ; if who = g_watchACar [set size 3 set color green ask my-links [set hidden? false] print "" type "***" type who type ": "] ; @RC DEBUG
   let p one-of patches in-cone velocity degre with [road?]
   ifelse (peut-avancer? p )
     [ avance p ]
     [ set heading old-heading
-                       if who = g_watchACar[ask patch-ahead 1 [set pcolor black]] ; @RC DEBUG
+                       ; if who = g_watchACar[ask patch-ahead 1 [set pcolor black]] ; @RC DEBUG
       search-direction
     ]
 end
 
 to search-direction ; call by nest-direction
       let p one-of patches in-cone velocity degre with [road?]
-                      if who = g_watchACar [ ask patches in-cone velocity degre [set pcolor blue ]] ; *** RC@ DEBUG
-                      if who = g_watchACar [ if user-yes-or-no? degre [ ask patches in-cone velocity degre [set pcolor white ] ]] ; *** RC@ DEBUG
+                      ; if who = g_watchACar [ ask patches in-cone velocity degre [set pcolor blue ]] ; *** RC@ DEBUG
+                      ; if who = g_watchACar [ if user-yes-or-no? degre [ ask patches in-cone velocity degre [set pcolor white ] ]] ; *** RC@ DEBUG
       ifelse (peut-avancer? p )
        [ avance p]
-       [                if who = g_watchACar [print degre type " "]; @RC DEBUG
+       [              ; if who = g_watchACar [print degre type " "]; @RC DEBUG
          set degre degre + 30
          if degre < 361 [search-direction]
        ]
@@ -207,7 +208,7 @@ end
 
 to-report peut-avancer? [p]
   let nb_passage length (filter [ i -> i = who ] list_car_memory)
-  if who = g_watchACar [ print "" type " list : nb_passage " type nb_passage type " - " print list_car_memory ] ; *** RC@ DEBUG
+                        ; if who = g_watchACar [ print "" type " list : nb_passage " type nb_passage type " - " print list_car_memory ] ; *** RC@ DEBUG
   ifelse (is-patch? p and p != patch-here and nb_passage < 3)
     [report true]
     [report false]
@@ -295,6 +296,7 @@ end
 to supNotElect
   ; parametrage des voitures electric
   ask voitures [ if not isElectric? [die] ]
+  set totalVoiture count voitures
 end
 
 ;===================================================================
@@ -466,7 +468,7 @@ pourcentageElectrique
 pourcentageElectrique
 0
 100
-1.0
+2.0
 1
 1
 NIL
@@ -481,7 +483,7 @@ velocity
 velocity
 0
 5
-4.5
+5.0
 .5
 1
 NIL
@@ -572,23 +574,6 @@ NIL
 0
 
 BUTTON
-24
-739
-195
-772
-Show Target
-;watch patch-at xcor-target ycor-target\nifelse g_watchTarget? \n   [reset-perspective \n    set g_watchTarget? false]\n   [ let theTarget one-of patches with \n        [ pxcor = xcor-target and \n          pycor =  ycor-target]\n      set g_watchTarget? true\n      watch theTarget\n    ]\n
-NIL
-1
-T
-OBSERVER
-NIL
-T
-NIL
-NIL
-0
-
-BUTTON
 48
 166
 116
@@ -623,10 +608,10 @@ NIL
 0
 
 MONITOR
-24
-692
-106
-737
+20
+623
+102
+668
 NIL
 xcor-target
 17
@@ -634,10 +619,10 @@ xcor-target
 11
 
 MONITOR
-107
-692
-195
-737
+103
+623
+191
+668
 NIL
 ycor-target
 17
@@ -645,10 +630,10 @@ ycor-target
 11
 
 INPUTBOX
-20
-615
-191
-675
+24
+728
+195
+788
 g_watchACar
 412.0
 1
