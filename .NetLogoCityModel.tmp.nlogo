@@ -696,7 +696,7 @@ Press GO to run the simulation. (Only after you have run CLEAR, and let VIEW ROA
 
 ## RELATED MODELS
 
-SmartCityModel : Imperial College London - https://github.com/albertopolis/SmartCityModel
+SamrtCityModel : Imperial College L
 
 
 ## HOW TO CITE
