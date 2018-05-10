@@ -160,7 +160,7 @@ end ; --------------------------------------------------------------------------
 to-report define-heading [old-heading]
   ; @RC TODO
   ; ici faire une étude de localisation de la cible
-  ; si celle-ci est dans un autre district repartir vers le littoral pour eviter de se fourvoyer dans les hauts de l'Ile et revbenir vers les axes principaux
+  ; si celle-ci est dans un autre district repartir vers le littoral pour eviter de se fourvoyer dans les hauts de l'
   report old-heading
 end
 
