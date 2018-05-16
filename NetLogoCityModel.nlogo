@@ -1,6 +1,6 @@
 ;=================================================================================================
 ; Urban simulation program for the town of Saint-Denis, Réunion Island
-; Version 0.4
+; Version 0.5
 ;==================================================================================================
 
 ;---Déclaration des librairies d'extension au langage----
@@ -25,6 +25,16 @@ globals [
   LastvisitedTarget
   degre
   visibility
+  barachois
+  bdSud
+  montagne
+  prefecture
+  moufia
+  boisDeNefle
+  bretagne
+  LeBrule
+  versOuest
+  current-quartier
 ]
 
 ;---Définition des classes d'agents------------------------
@@ -32,7 +42,8 @@ breed [ voitures voiture ]
 voitures-own [
   direction    ; sens de déplacement
   home-pos     ; coordonnée de départ
-  dest-pos ; coordonnée point d'arrivée
+  dest-pos     ; coordonnée point d'arrivée
+  save-pos     ; permet de sauver la position finale et d'utiliser dest)pos pour des destination intermédiaire
   isElectric?  ; FALSE classique, TRUE Electrique
   isArrived?
   energyLevel  ; 1 à 100
@@ -41,9 +52,10 @@ breed [ targets target ]
 targets-own [
   nbcars_arrived_to_this_target
 ]
+breed [ district-labels district-label ]
 
 ;---Initialisation des patches------------------------------
-patches-own [ road? list_car_memory]
+patches-own [ road? list_car_memory densite quartier]
 
 
 ;==================================================================================================
@@ -52,6 +64,18 @@ patches-own [ road? list_car_memory]
 to setup
   ;remise à zero
   clear-all
+
+  ; point de passage intermédiare
+  set barachois list 12 65
+  set bdSud list 10 52
+  set montagne list -4 56
+  set prefecture list -8 65
+  set moufia list 28 46
+  set bretagne list 53 43
+  set LeBrule list -1 36
+  set boisDeNefle list 32 44
+  set versOuest -55
+
   ;set g_watchACar nobody
   set g_watchTarget? FALSE
   set totalVoiture 0
@@ -78,10 +102,14 @@ to setup
                                                 ;(gis:envelope-of dataset_commercial)
                                                 ;(gis:envelope-of dataset_leisure)
                                                 (gis:envelope-of dataset_habitation))
+
+
   ; creation d'une cible de destination pour les voitures
   create-targets 1  [setxy -2 93 set color red set size 2 set shape "target"]
   ask targets [set hidden? true]
   set LastvisitedTarget nobody
+  ask turtles [ stop-inspecting self ]
+  display-city-districts
 
   ; initialisation du séquenceur agents
   reset-ticks
@@ -104,8 +132,8 @@ end ;===========================================================================
 
 ; PROCEDURE : DRIVE
 to drive
-  set visibility 2
-  ifelse (distancexy (item 0 dest-pos) (item 1 dest-pos) < visibility)
+  set visibility min list 2 max-visibility
+  ifelse (distancexy (item 0 save-pos) (item 1 save-pos) < visibility)
      [; la viture est arrivée
           set isArrived? TRUE
           set totalVoituresToDestination totalVoituresToDestination + 1
@@ -114,8 +142,11 @@ to drive
                       if (debug? and who = g_watchACar) [ print "" type "### car : " type g_watchACar type " is arrived ***" ] ; RC@ DEBUG ***
      ]
      [; la voiture n'est pas arrivée
+
           ifelse energyLevel > 0 [
             ; elle a encore de l'energie
+            define-dest-pos
+            if (who = g_watchACar) [set label word "cible : " dest-quartier]
             next-direction
           ]
           [ ; elle n'a plus d'energie; on supprime la voiture en panne du réseau routier
@@ -133,7 +164,7 @@ to consume
        set energyLevel energyLevel - .1 ; @RC TODO simpliste à retravailler
        if energylevel < 0 [set energylevel 0]
                           if (debug? and who = g_watchACar) [set label int energylevel] ; @RC DEBUG ***
-       set color scale-color red energylevel minEnergyLevel maxEnergyLevel
+       set color scale-color red energylevel minEnergyLevel (maxEnergyLevel / 6)
 end
 
 ; PROCEDURE : NEXT-DIRECTION -----------------------------------------------------------------
@@ -145,11 +176,11 @@ to next-direction
   set degre 30
   ; on est face à notre destination si il y a une route on la prend
   ; sinon on se remet dans notre direction d'avant et une cherche à continuer notre route
-                       if (debug? and who = g_watchACar) [set size 3 set color green ask my-links [set hidden? false] print "" type "***" type who type ": "] ; @RC DEBUG ***
+                       if (debug? and who = g_watchACar) [set size 3 ask my-links [set hidden? false] print "" type "***" type who type ": "] ; @RC DEBUG ***
   let next-selected-patch one-of patches in-cone visibility degre with [road?]
   ifelse (peut-avancer? next-selected-patch )
     [ avance next-selected-patch ]
-    [ set heading define-heading old-heading
+    [ set heading old-heading
                        if (debug? and who = g_watchACar)[ask patch-ahead 1 [set pcolor black]] ; @RC DEBUG ***
       search-direction list-of-none-issue-elected-patches
     ]
@@ -157,11 +188,39 @@ end ; --------------------------------------------------------------------------
 
 ; PROCEDURE : DEFINE-HIDING
 ;
-to-report define-heading [old-heading]
+to define-dest-pos
   ; @RC TODO
   ; ici faire une étude de localisation de la cible
   ; si celle-ci est dans un autre district repartir vers le littoral pour eviter de se fourvoyer dans les hauts de l'Ile et revbenir vers les axes principaux
-  report old-heading
+
+  ask patch-here [ set current-quartier quartier]
+  if (who = g_watchACar)[ if user-yes-or-no? (word current-quartier " " dest-quartier) [ print "-" ]] ; RC@ DEBUG ***
+  ; si on est dans l'est de Saint-denis et que l'on veut aller à l'ouset ou dans un quartier ouest de la ville
+  ifelse (not member? current-quartier ["SAINT-BERNARD" "LA MONTAGNE"] and (item 0 save-pos) <= versOuest)
+      [ set dest-pos prefecture ]
+      [ ifelse (not member? current-quartier ["SAINT-BERNARD" "LA MONTAGNE"]) and (member? dest-quartier ["SAINT-BERNARD" "LA MONTAGNE"])
+        [ ifelse (who mod 2 = 1) ; aleatoirement on prend barachois ou bd sud
+             [ set dest-pos montagne]
+             [ set dest-pos prefecture]
+        ]
+        ; si on est à l'ouest et que l'on veut aller dans un quartier est de la ville
+      [ ifelse (member? current-quartier ["SAINT-BERNARD" "LA MONTAGNE"]) and (not member? dest-quartier ["SAINT-BERNARD" "LA MONTAGNE"])
+            [ ifelse (who mod 2 = 1) ; aleatoirement on prend barachois ou bas de la montagne en cible
+                [ set dest-pos barachois ]
+                [ set dest-pos montagne  ]
+            ]
+          ; si on est dans les hauts
+            [ ifelse current-quartier = "Les Hauts" and (dest-quartier != ("Les Hauts"))
+                 [ set dest-pos BdSud]
+                 [ ifelse (dest-quartier = "Les Hauts") and (not member? current-quartier ["LE BRULE" "LA BRETAGNE" "SAINT-FRANCOIS" "BOIS DE NEFLES"])
+                      [ set dest-pos LeBrule ]
+                      [ ifelse (current-quartier != "LA BRETAGNE" and dest-quartier = "BRETAGNE")
+                          [ set dest-pos bretagne ]
+                          [ ifelse (current-quartier != "BOIS DE NEFLES" and dest-quartier = "BOIS DE NEFLES")
+                            [ set dest-pos boisDeNefle]
+                            [ set dest-pos save-pos
+                                  if (debug? and who = g_watchACar) [ print "cible fibale proche" ]
+      ]]]]]]]
 end
 
 ; PROCEDURE : SEARCH-DIRECTION
@@ -213,6 +272,13 @@ to avance [next-selected-patch]
   ]
 end ; --------------------------------------------------------------------------
 
+to-report dest-quartier
+  let loc-quartier ""
+  ask patch-at (item 0 dest-pos) (item 1 dest-pos) [set loc-quartier quartier]
+  if loc-quartier = "" [ask patch-at (item 0 dest-pos) (item 1 dest-pos) [set pcolor black]]
+  report loc-quartier
+end
+
 ; FUNCTION : PEUT-AVANCER?
 ;
 to-report peut-avancer? [next-selected-patch]
@@ -257,17 +323,34 @@ to display-habitations
   ]
 end  ; --------------------------------------------------------------------------
 
-to display-quartiers
+to display-city-districts
 
   gis:set-drawing-color green
   gis:draw dataset_quartier 3
   foreach gis:feature-list-of dataset_quartier [ set totalQuartier totalQuartier + 1]
 
   if (debug?) [
-    show "--- Propriété du dataset_habitation : "
+    show "--- Propriété du dataset_quartier : "
     print gis:property-names dataset_quartier
     print gis:feature-list-of dataset_quartier
   ]
+  gis:apply-coverage dataset_quartier "DENSITE_PO" densite
+  gis:apply-coverage dataset_quartier "NOM" quartier
+
+  ask patches [if not is-number? densite  [set densite 0]]
+  ask patches [if not is-string? quartier [set quartier ""]]
+
+  if View-district-name?
+  [ foreach gis:feature-list-of dataset_quartier [ vector-feature ->
+      let centroid gis:location-of gis:centroid-of vector-feature
+      if not empty? centroid
+      [ create-district-labels 1
+        [ set xcor item 0 centroid
+          set ycor item 1 centroid
+          set size 0
+          set label-color green
+          set label gis:property-value vector-feature "NOM" ] ] ]]
+
 end  ; --------------------------------------------------------------------------
 
 
@@ -284,11 +367,12 @@ to display-cars
           [ set home-pos list xcor ycor
             let aTarget one-of targets;
             create-link-to aTarget
-            ask my-links [hide-link]; [set hidden? true]
+            ask my-links [hide-link];
             let temp-pos list 0 0
             ask aTarget [set temp-pos list xcor ycor]
             set dest-pos temp-pos
-            set shape "car"
+            set save-pos temp-pos
+            ;set shape "car"
             set isElectric? FALSE
             set isArrived? FALSE
             set color white - 3
@@ -322,7 +406,7 @@ end  ; -------------------------------------------------------------------------
 ;
 to set-target
   ; au clic souris : positionne des cibles à atteindre pour les véhicules sur la map
-  if mouse-down? [
+  if mouse-down? and count voitures = 0 [
       let node one-of targets with [distancexy mouse-xcor mouse-ycor < 4]
 
       if node = nobody [
@@ -333,13 +417,11 @@ to set-target
            set shape "target"
            set nbcars_arrived_to_this_target 0
            set hidden? false
+           set LastvisitedTarget node
         ]
       ]
       if node = LastvisitedTarget and node != nobody [
-        ask node [
-           ask my-links [set hidden? true]
-           ask link-neighbors [ set color red set size 1 ]
-        ]
+        ask node [ ask my-links [hide-link]]
       ]
   ]
 
@@ -352,7 +434,6 @@ to set-target
             set label (word nbcars_arrived_to_this_target "/" (count my-links))
             ask targets [ask my-links [set hidden? true]]
             ask my-links [set hidden? false]
-            ask link-neighbors [set size 2 ]
             set LastvisitedTarget node
           ]
     ]
@@ -371,14 +452,14 @@ to watchACar
   if mouse-inside? [
     let car one-of voitures with [distancexy mouse-xcor mouse-ycor < 2]
     if car != nobody and car != voiture g_watchACar
-       [ask car
+       [ ask voitures [ ask links [hide-link] set label "" set size 1]
+         ask car
           [ set label-color black
             set label who
-            ask voitures [ ask links [hide-link] set label ""]
             ask my-links [show-link]
             set g_watchACar who
           ]
-    ]
+       ]
   ]
   ; au clic souris : positionne des cibles à atteindre pour les véhicules sur la map
   if mouse-down? [stop];desactiver le button
@@ -395,11 +476,11 @@ end ; --------------------------------------------------------------------------
 GRAPHICS-WINDOW
 210
 10
-2228
-2029
+1346
+1147
 -1
 -1
-10.0
+8.0
 1
 10
 1
@@ -409,10 +490,10 @@ GRAPHICS-WINDOW
 1
 1
 1
--100
-100
--100
-100
+-70
+70
+-70
+70
 0
 0
 1
@@ -421,9 +502,9 @@ ticks
 
 BUTTON
 10
-26
+58
 188
-59
+91
 1. Clear and setup
 setup
 NIL
@@ -438,9 +519,9 @@ NIL
 
 BUTTON
 48
-67
+94
 188
-100
+127
 2. View roads
 display-routes
 NIL
@@ -455,28 +536,11 @@ NIL
 
 BUTTON
 48
-100
+127
 188
-133
+160
 [2. View homes]
 display-habitations
-NIL
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-0
-
-BUTTON
-48
-133
-188
-166
-[2. View city districts]
-display-quartiers
 NIL
 1
 T
@@ -557,7 +621,7 @@ pourcentageElectrique
 pourcentageElectrique
 0
 100
-1.0
+9.0
 1
 1
 NIL
@@ -572,7 +636,7 @@ max-visibility
 max-visibility
 1
 10
-9.0
+2.5
 .5
 1
 NIL
@@ -606,7 +670,7 @@ BUTTON
 188
 242
 3. Create cars
-display-cars
+ask voitures [die]\nset totalvoiture 0\nset totalVoituresToDestination 0\nset totalVoituresPanneEnergie 0\ndisplay-cars
 NIL
 1
 T
@@ -641,7 +705,7 @@ SWITCH
 823
 debug?
 debug?
-0
+1
 1
 -1000
 
@@ -651,7 +715,7 @@ BUTTON
 188
 275
 Sup all cars
-ask voitures [die]\nset totalVoiture 0\nset totalVoituresToDestination 0\nset totalVoituresPanneEnergie 0
+if user-yes-or-no? \"confirm delete all cars ?\" [\n  ask voitures [die]\n  set totalVoiture 0\n  set totalVoituresToDestination 0\n  set totalVoituresPanneEnergie 0\n]
 NIL
 1
 T
@@ -663,11 +727,11 @@ NIL
 0
 
 BUTTON
-48
-166
-116
-199
-Set target
+16
+172
+84
+205
+Set targets
 set-target
 T
 1
@@ -680,12 +744,12 @@ NIL
 0
 
 BUTTON
-116
-166
-188
-199
-Sup Targets
-ask targets [die]
+84
+172
+139
+205
+Sup
+if user-yes-or-no? \"confirm delete all targets ?\" [ask targets [die]]
 NIL
 1
 T
@@ -702,7 +766,7 @@ INPUTBOX
 190
 733
 g_watchACar
-816411.0
+168190.0
 1
 0
 Number
@@ -715,7 +779,7 @@ SLIDER
 maxEnergyLevel
 maxEnergyLevel
 0
-1000
+500
 320.0
 10
 1
@@ -730,8 +794,8 @@ SLIDER
 minEnergyLevel
 minEnergyLevel
 20
-1000
-48.0
+500
+120.0
 10
 1
 NIL
@@ -762,6 +826,34 @@ BUTTON
 SelectACar
 watchACar
 T
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+SWITCH
+11
+23
+189
+56
+View-district-name?
+View-district-name?
+0
+1
+-1000
+
+BUTTON
+133
+172
+188
+205
+Show
+ask targets [let link-color grey ; scale-color blue (count my-links) 20 (totalVoiture / count targets) \n             ask links [ifelse (hidden? = true) [set color link-color show-link]\n                                                [set color link-color hide-link]\n            ]]
+NIL
 1
 T
 OBSERVER
