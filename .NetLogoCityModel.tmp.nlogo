@@ -14,11 +14,15 @@ globals [
   dataset_commercial
   dataset_industriel
   dataset_leisure
+  dataset_work
   feature_list
   totalHabitation
   totalVoiture
   totalRoute
   totalQuartier
+  totalCommercial
+  totalLeisure
+  totalWork
   g_watchTarget?
   totalVoituresPanneEnergie
   totalVoituresToDestination
@@ -35,6 +39,7 @@ globals [
   LeBrule
   versOuest
   current-quartier
+  totalTarget
 ]
 
 ;---Définition des classes d'agents------------------------
@@ -42,8 +47,9 @@ breed [ voitures voiture ]
 voitures-own [
   direction    ; sens de déplacement
   home-pos     ; coordonnée de départ
-  dest-pos     ; coordonnée point d'arrivée
-  save-pos     ; permet de sauver la position finale et d'utiliser dest)pos pour des destination intermédiaire
+  dest-pos     ; coordonnée point d'arrivée intermédiare
+  my-target    ; lieu d'arrivée finale
+  save-pos     ; permet de sauver la position finale et d'utiliser dest-pos pour des destination intermédiaire
   isElectric?  ; FALSE classique, TRUE Electrique
   isArrived?
   energyLevel  ; 1 à 100
@@ -51,6 +57,7 @@ voitures-own [
 breed [ targets target ]
 targets-own [
   nbcars_arrived_to_this_target
+  is-default?
 ]
 breed [ district-labels district-label ]
 
@@ -84,6 +91,7 @@ to setup
   set totalVoituresPanneEnergie 0
   set totalVoituresToDestination 0
   set pourcentageElectrique 1
+  set totalTarget 0
   ask patches [
     set pcolor white
     set road? false
@@ -94,22 +102,29 @@ to setup
   set dataset_route gis:load-dataset "NET/roads.shp"
   set dataset_quartier gis:load-dataset "NET/Quartier.shp"
   set dataset_habitation gis:load-dataset "NET/home.shp"
-  ;set dataset_commercial gis:load-dataset "NET/commercial.shp"
-  ;set dataset_leisure gis:load-dataset "NET/leisure.shp"
+  set dataset_commercial gis:load-dataset "NET/commercial.shp"
+  set dataset_leisure gis:load-dataset "NET/leisure.shp"
+  set dataset_work gis:load-dataset "NET/work.shp"
 
   gis:set-world-envelope (gis:envelope-union-of (gis:envelope-of dataset_route)
                                                 (gis:envelope-of dataset_quartier)
                                                 ;(gis:envelope-of dataset_commercial)
-                                                ;(gis:envelope-of dataset_leisure)
+                                                (gis:envelope-of dataset_leisure)
+                                                (gis:envelope-of dataset_work)
                                                 (gis:envelope-of dataset_habitation))
 
 
-  ; creation d'une cible de destination pour les voitures
-  create-targets 1  [setxy -2 93 set color red set size 2 set shape "target"]
-  ask targets [set hidden? true]
+
+  display-city-districts
+  display-routes
+
+  ; on constrruit une cible virtuelle au centre villle au cas ou l'utilisateur n'en definisse aucune par l'interface de l'application
+  let P one-of patches with [quartier = "CENTRE-VILLE"];
+  create-targets 1  [setxy ([pxcor] of p) ([pycor] of p) set is-default? true set color red set size 2 set shape "target"] ; creation d'une cible initiale de destination pour les voitures
+  set totalTarget 1
+
   set LastvisitedTarget nobody
   ask turtles [ stop-inspecting self ]
-  display-city-districts
 
   ; initialisation du séquenceur agents
   reset-ticks
@@ -132,9 +147,10 @@ end ;===========================================================================
 
 ; PROCEDURE : DRIVE
 to drive
+  ask my-target [set hidden? false]
   set visibility min list 2 max-visibility
   ifelse (distancexy (item 0 save-pos) (item 1 save-pos) < visibility)
-     [; la viture est arrivée
+     [; la voiture est arrivée
           set isArrived? TRUE
           set totalVoituresToDestination totalVoituresToDestination + 1
           ask targets-here [set nbcars_arrived_to_this_target nbcars_arrived_to_this_target + 1]
@@ -146,7 +162,6 @@ to drive
           ifelse energyLevel > 0 [
             ; elle a encore de l'energie
             define-dest-pos
-            if (who = g_watchACar) [set label word "cible : " dest-quartier]
             next-direction
           ]
           [ ; elle n'a plus d'energie; on supprime la voiture en panne du réseau routier
@@ -157,6 +172,7 @@ to drive
             ]
           ]
   ]
+  ask my-target [set hidden? true]
 end ; --------------------------------------------------------------------------
 
 ; PROCEDURE : CONSUME
@@ -194,7 +210,6 @@ to define-dest-pos
   ; si celle-ci est dans un autre district repartir vers le littoral pour eviter de se fourvoyer dans les hauts de l'Ile et revbenir vers les axes principaux
 
   ask patch-here [ set current-quartier quartier]
-  if (who = g_watchACar)[ if user-yes-or-no? (word current-quartier " " dest-quartier) [ print "-" ]] ; RC@ DEBUG ***
   ; si on est dans l'est de Saint-denis et que l'on veut aller à l'ouset ou dans un quartier ouest de la ville
   ifelse (not member? current-quartier ["SAINT-BERNARD" "LA MONTAGNE"] and (item 0 save-pos) <= versOuest)
       [ set dest-pos prefecture ]
@@ -204,23 +219,29 @@ to define-dest-pos
              [ set dest-pos prefecture]
         ]
         ; si on est à l'ouest et que l'on veut aller dans un quartier est de la ville
-      [ ifelse (member? current-quartier ["SAINT-BERNARD" "LA MONTAGNE"]) and (not member? dest-quartier ["SAINT-BERNARD" "LA MONTAGNE"])
+        [ ifelse (member? current-quartier ["SAINT-BERNARD" "LA MONTAGNE"]) and (not member? dest-quartier ["SAINT-BERNARD" "LA MONTAGNE"])
             [ ifelse (who mod 2 = 1) ; aleatoirement on prend barachois ou bas de la montagne en cible
-                [ set dest-pos barachois ]
-                [ set dest-pos montagne  ]
+                [ set dest-pos barachois  printd "barachois"]
+                [ set dest-pos montagne   printd "montagne"]
             ]
-          ; si on est dans les hauts
+            ; si on est dans les hauts
             [ ifelse current-quartier = "Les Hauts" and (dest-quartier != ("Les Hauts"))
-                 [ set dest-pos BdSud]
+                 [ set dest-pos BdSud printd "BdSud"]
                  [ ifelse (dest-quartier = "Les Hauts") and (not member? current-quartier ["LE BRULE" "LA BRETAGNE" "SAINT-FRANCOIS" "BOIS DE NEFLES"])
-                      [ set dest-pos LeBrule ]
+                      [ set dest-pos LeBrule printd "LeBrule"]
                       [ ifelse (current-quartier != "LA BRETAGNE" and dest-quartier = "BRETAGNE")
-                          [ set dest-pos bretagne ]
-                          [ ifelse (current-quartier != "BOIS DE NEFLES" and dest-quartier = "BOIS DE NEFLES")
-                            [ set dest-pos boisDeNefle]
-                            [ set dest-pos save-pos
-                                  if (debug? and who = g_watchACar) [ print "cible fibale proche" ]
-      ]]]]]]]
+                          [ set dest-pos bretagne printd "bretagne" ]
+                          [ ifelse (current-quartier != "BOIS DE NEFLES" and dest-quartier = "BOIS DE NEFLES" )
+                            [ set dest-pos boisDeNefle printd "BoisdeNefle"]
+                            [ ifelse (current-quartier = "BOIS DE NEFLES" and dest-quartier = "SAINT-FRANCOIS")
+                                [ set dest-pos Moufia printd "Moufia"]
+                                [ set dest-pos save-pos ]
+  ]]]]]]]
+  if (who = g_watchACar)[ set label (word "car " who " de " current-quartier " vers " dest-quartier) ]
+end
+
+to printd [s]
+  if (who = g_watchACar) [print s]
 end
 
 ; PROCEDURE : SEARCH-DIRECTION
@@ -229,12 +250,11 @@ end
 ;
 to search-direction [list-of-none-issue-elected-patches] ;
    let next-selected-patch one-of patches in-cone visibility degre with [road? and not member? self list-of-none-issue-elected-patches]
-                      if (debug? and who = g_watchACar) [ ;RC@ DEBUG ***
+                      if (who = g_watchACar) [ ;RC@ DEBUG ***
                            ask patches in-cone visibility degre with [road?][set pcolor blue ] ; RC@ DEBUG ***
-                           print "" type "next patch : " type next-selected-patch type " list-of-visited-patches : " type list-of-none-issue-elected-patches type " "; @RC DEBUG ***
-                           print "" type "cone : " type degre type " " type "visibility : " type visibility type " "; @RC DEBUG ***
+                           ; print "" type "next patch : " type next-selected-patch type " list-of-visited-patches : " type list-of-none-issue-elected-patches type " "; @RC DEBUG ***
+                           ; print "" type "cone : " type degre type " " type "visibility : " type visibility type " "; @RC DEBUG ***
                            if is-patch? next-selected-patch [ask next-selected-patch [set pcolor black]]; @RC DEBUG ***
-                           ;if user-yes-or-no? degre [ ask patches in-cone visibility degre [set pcolor white ] ] ; RC@ DEBUG ***
                       ] ;RC@ DEBUG ***
 
   ifelse (peut-avancer? next-selected-patch)
@@ -253,7 +273,9 @@ to search-direction [list-of-none-issue-elected-patches] ;
                        set visibility visibility + 1
                        search-direction list-of-none-issue-elected-patches
                     ]
-                    [                      if (debug? and who = g_watchACar) [ print word "### voiture sans solution ### : " self ]] ;RC@ DEBUG ***
+                    [ ; print word "### voiture sans solution ### : " self
+                      ask neighbors [ set list_car_memory remove self list_car_memory ] ; on remet des possibles
+                    ]
               ]
         ]
 end ; --------------------------------------------------------------------------
@@ -267,15 +289,15 @@ to avance [next-selected-patch]
   consume
   ; on se rappelle que l'on est passé là
   let v who
-  ask next-selected-patch [set list_car_memory fput v list_car_memory
-                        if (debug? and v = g_watchACar) [ print "###" print list_car_memory ] ; RC@ DEBUG ***
-  ]
-end ; --------------------------------------------------------------------------
+  ask next-selected-patch [set list_car_memory fput v list_car_memory ]
+end
 
 to-report dest-quartier
   let loc-quartier ""
-  ask patch-at (item 0 dest-pos) (item 1 dest-pos) [set loc-quartier quartier]
-  if loc-quartier = "" [ask patch-at (item 0 dest-pos) (item 1 dest-pos) [set pcolor black]]
+  let loc-destx round (item 0 dest-pos) let loc-desty round (item 1 dest-pos)
+  let loc-patch one-of patches with [pxcor = loc-destx and pycor = loc-desty]
+  if (loc-patch = nobody) [inspect self]
+  ask loc-patch [set loc-quartier quartier]
   report loc-quartier
 end
 
@@ -286,13 +308,15 @@ to-report peut-avancer? [next-selected-patch]
   let l []
   ask next-selected-patch [set l list_car_memory]
   let nb_passage length (filter [ i -> i = who ] l)
-                        if (debug? and who = g_watchACar) [ print "" type " list : nb_passage " type nb_passage type " - " print l ] ; RC@ DEBUG ***
-  ifelse (is-patch? next-selected-patch and next-selected-patch != patch-here and nb_passage < 3)
+  ifelse (is-patch? next-selected-patch and next-selected-patch != patch-here and nb_passage < 4)
     [report true]
     [report false]
-end  ; --------------------------------------------------------------------------
+end
 
 
+;=================================================================================
+; Affichage des iformation issues des shapefile
+;---------------------------------------------------------------------------------
 to display-routes
   gis:set-drawing-color grey
 
@@ -309,7 +333,7 @@ to display-routes
       ; les routes seront en jaunes
       ask patches with [road?][set pcolor yellow]
   ]
-end  ; --------------------------------------------------------------------------
+end
 
 to display-habitations
   gis:set-drawing-color green
@@ -321,7 +345,7 @@ to display-habitations
     print gis:property-names dataset_habitation
     print gis:feature-list-of dataset_habitation
   ]
-end  ; --------------------------------------------------------------------------
+end
 
 to display-city-districts
 
@@ -345,14 +369,31 @@ to display-city-districts
       let centroid gis:location-of gis:centroid-of vector-feature
       if not empty? centroid
       [ create-district-labels 1
-        [ set xcor item 0 centroid
-          set ycor item 1 centroid
+        [ set xcor round (item 0 centroid)
+          set ycor round (item 1 centroid)
           set size 0
           set label-color green
           set label gis:property-value vector-feature "NOM" ] ] ]]
 
-end  ; --------------------------------------------------------------------------
+end
 
+to display-commercial
+  gis:set-drawing-color Black
+  gis:draw dataset_commercial 1
+  foreach gis:feature-list-of dataset_commercial [set totalcommercial totalcommercial + 1]
+end
+
+to display-leisure
+  gis:set-drawing-color Blue
+  gis:draw dataset_leisure 1
+  foreach gis:feature-list-of dataset_leisure [set totalleisure totalleisure + 1]
+end
+
+to display-work
+  gis:set-drawing-color Brown
+  gis:draw dataset_work 1
+  foreach gis:feature-list-of dataset_work [set totalwork totalwork + 1]
+end
 
 to display-cars
   foreach gis:feature-list-of dataset_habitation [ vector-feature ->
@@ -371,13 +412,14 @@ to display-cars
             let temp-pos list 0 0
             ask aTarget [set temp-pos list xcor ycor]
             set dest-pos temp-pos
-            set save-pos temp-pos
+            set save-pos dest-pos
+            set my-target aTarget
             ;set shape "car"
             set isElectric? FALSE
             set isArrived? FALSE
             set color white - 3
-            set xcor item 0 centroid
-            set ycor item 1 centroid
+            set xcor round (item 0 centroid)
+            set ycor round (item 1 centroid)
           ]
       ]
   ]
@@ -390,40 +432,44 @@ to display-cars
         if energyLevel < minEnergyLevel [set energyLevel minEnergyLevel ]
         if debug? [set label-color black set label int energylevel] ; @RC DEBUG ***
   ]
-end  ; --------------------------------------------------------------------------
+end
 
+
+;=================================================================================
+; Interface Homme machine avec l'Interface
+;---------------------------------------------------------------------------------
 
 to supNotElect
   ; parametrage des voitures electric
   ask voitures [ if not isElectric? [die] ]
   set totalVoiture count voitures
-end  ; --------------------------------------------------------------------------
+end
 
 ; PROCEDURE : SET-TARGET
 ; SET-TARGET : positionnement et visualisation des cibles
 ; (1) au clic souris : positionne des cibles à atteindre pour les véhicules sur la map
 ; (2) sau passqge sur une cible : montre les véhicules qui sont liés à cette cible
-;
 to set-target
+  ; on supprime la target par default
+  ask targets with [is-default?] [Die]
   ; au clic souris : positionne des cibles à atteindre pour les véhicules sur la map
-  if mouse-down? and count voitures = 0 [
+  if mouse-down? [
       let node one-of targets with [distancexy mouse-xcor mouse-ycor < 4]
 
       if node = nobody [
         create-targets 1 [
-           setxy mouse-xcor mouse-ycor
+           setxy round mouse-xcor round mouse-ycor
            set color red
            set size 2
            set shape "target"
+           set is-default? false
            set nbcars_arrived_to_this_target 0
            set hidden? false
            set LastvisitedTarget node
-        ]
-      ]
+      ]]
       if node = LastvisitedTarget and node != nobody [
         ask node [ ask my-links [hide-link]]
-      ]
-  ]
+  ]]
 
   ; au passage sur une cible : montre les véhicules qui sont liés à cette cible
   if mouse-inside? [
@@ -435,39 +481,110 @@ to set-target
             ask targets [ask my-links [set hidden? true]]
             ask my-links [set hidden? false]
             set LastvisitedTarget node
-          ]
-    ]
-  ]
+  ]]]
   display
-end ; --------------------------------------------------------------------------
+end
 
-; PROCEDURE : watchACar
-; SET-TARGET : positionnement et visualisation des cibles
-; (1) au clic souris : positionne des cibles à atteindre pour les véhicules sur la map
-; (2) sau passqge sur une cible : montre les véhicules qui sont liés à cette cible
-;
+
+to Autotarget
+  ask targets [die]
+  set totalTarget 0
+
+  foreach gis:feature-list-of dataset_work [ vector-feature ->
+      let centroid gis:location-of gis:centroid-of vector-feature
+      set totalTarget totalTarget + 1
+      ; centroid will be an empty list if it lies outside the bounds
+      ; of the current NetLogo world, as defined by our current GIS
+      ; coordinate transformation
+      if not empty? centroid
+      [ create-targets 1
+          [ set xcor item 0 centroid
+            set ycor item 1 centroid
+            setxy  round xcor round ycor
+            set color red
+            set size 1
+            set shape "target"
+            set nbcars_arrived_to_this_target 0
+            set is-default? false
+            set hidden? true
+          ]
+      ]
+  ]
+
+  foreach gis:feature-list-of dataset_leisure [ vector-feature ->
+      let centroid gis:location-of gis:centroid-of vector-feature
+      set totalTarget totalTarget + 1
+      ; centroid will be an empty list if it lies outside the bounds
+      ; of the current NetLogo world, as defined by our current GIS
+      ; coordinate transformation
+      ifelse not empty? centroid
+      [ create-targets 1
+          [ set xcor item 0 centroid
+            set ycor item 1 centroid
+            setxy  round xcor round ycor
+            set color red - 2
+            set size 1
+            set shape "target"
+            set nbcars_arrived_to_this_target 0
+            set hidden? true
+            set is-default? false
+          ]
+      ]
+    [ if debug? [print "target commerciale centroid empty"] ]
+   ]
+
+ foreach gis:feature-list-of dataset_commercial [ vector-feature ->
+      let centroid gis:location-of gis:centroid-of vector-feature
+      set totalTarget totalTarget + 1
+      ; centroid will be an empty list if it lies outside the bounds
+      ; of the current NetLogo world, as defined by our current GIS
+      ; coordinate transformation
+      if not empty? centroid
+      [ create-targets 1
+          [ set xcor item 0 centroid
+            set ycor item 1 centroid
+            setxy  round xcor round ycor
+            set color red - 3
+            set size 1
+            set shape "target"
+            set nbcars_arrived_to_this_target 0
+            set hidden? true
+            set is-default? false
+          ]
+      ]
+  ]
+end
+
+
+
+; PROCEDURE : WATCHACAR
+; Positionnement et visualisation des cibles de trajets pour les voitures
+; (1) au passage sur une une voiture : positionne la voiture à inspecter dans la variable g_watchACar
+; (2) au clic souris : arrete le suivi de la voiture à inspecter
 to watchACar
-
-  ; au passage sur une cible : montre les véhicules qui sont liés à cette cible
-  if mouse-inside? [
-    let car one-of voitures with [distancexy mouse-xcor mouse-ycor < 2]
-    if car != nobody and car != voiture g_watchACar
+    ; au passage sur une une voiture : positionne la voiture à inspecter dans la variable g_watchACar
+    ; au clic souris : arrete le suivi de la voiture à inspecter
+  ifelse mouse-down?
+     [stop] ; desactiver le button
+     [if mouse-inside? [
+       let car one-of voitures with [distancexy mouse-xcor mouse-ycor < 2]
+       if car != nobody and car != voiture g_watchACar
        [ ask voitures [ ask links [hide-link] set label "" set size 1]
          ask car
           [ set label-color black
             set label who
             ask my-links [show-link]
             set g_watchACar who
-          ]
-       ]
-  ]
-  ; au clic souris : positionne des cibles à atteindre pour les véhicules sur la map
-  if mouse-down? [stop];desactiver le button
-
+  ]]]]
   display
-end ; --------------------------------------------------------------------------
+end
 
-
+to supAllCars
+  ask voitures [die]
+   set totalvoiture 0
+   set totalVoituresToDestination 0
+   set totalVoituresPanneEnergie 0
+end
 
 ;===================================================================
 ; *** Copyright LIM lab, University of reunion Island, 2018
@@ -501,10 +618,10 @@ ticks
 30.0
 
 BUTTON
-10
-58
+25
+65
 188
-91
+98
 1. Clear and setup
 setup
 NIL
@@ -518,28 +635,11 @@ NIL
 1
 
 BUTTON
-48
-94
-188
-127
-2. View roads
-display-routes
-NIL
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-0
-
-BUTTON
-48
-127
-188
-160
-[2. View homes]
+115
+117
+189
+150
+Living
 display-habitations
 NIL
 1
@@ -552,11 +652,11 @@ NIL
 0
 
 BUTTON
-17
-284
-192
-317
-4. go
+19
+344
+194
+377
+Go
 go
 T
 1
@@ -569,108 +669,108 @@ NIL
 0
 
 MONITOR
-16
-335
-94
-380
-Nb quartiers
+19
+383
+104
+428
+Nb districts
 totalQuartier
 17
 1
 11
 
 MONITOR
-16
-385
-95
-430
-Nb routes
+19
+433
+104
+478
+Nb roads
 totalRoute
 17
 1
 11
 
 MONITOR
-105
-335
-190
-380
-Nb voitures
+108
+383
+193
+428
+Nb cars
 totalVoiture
 17
 1
 11
 
 MONITOR
-106
-385
-191
-430
-Nb Maisons
+109
+433
+194
+478
+Nb Home
 totalHabitation
 17
 1
 11
 
 SLIDER
-16
-503
-192
-536
+19
+551
+195
+584
 pourcentageElectrique
 pourcentageElectrique
 0
 100
-9.0
+1.0
 1
 1
 NIL
 HORIZONTAL
 
 SLIDER
-19
-616
-191
-649
+22
+664
+194
+697
 max-visibility
 max-visibility
 1
 10
-2.5
+1.5
 .5
 1
 NIL
 HORIZONTAL
 
 MONITOR
-16
-445
-97
-490
-Cars to dest.
-totalVoituresToDestination
+19
+482
+104
+527
+Nb Shopping
+totalcommercial
 17
 1
 11
 
 MONITOR
-106
-446
-191
-491
-Cars 0 Energy
-totalVoituresPanneEnergie
+108
+482
+192
+527
+Nb WorkPlaces
+totalWork
 17
 1
 11
 
 BUTTON
-15
-209
-188
-242
-3. Create cars
-ask voitures [die]\nset totalvoiture 0\nset totalVoituresToDestination 0\ndisplay-cars
+30
+293
+88
+326
+Create
+reset-ticks\ndisplay-cars\n
 NIL
 1
 T
@@ -682,11 +782,11 @@ NIL
 0
 
 BUTTON
-15
-241
-118
-275
-[Sup not elec. cars]
+89
+293
+193
+326
+Sup not elec. cars
 SupNotElect
 NIL
 1
@@ -710,29 +810,12 @@ debug?
 -1000
 
 BUTTON
-118
-242
-188
-275
-Sup all cars
-if user-yes-or-no? \"confirm delete all cars ?\" [\n  ask voitures [die]\n  set totalVoiture 0\n  set totalVoituresToDestination 0\n  set totalVoituresPanneEnergie 0\n]
-NIL
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-0
-
-BUTTON
-16
-172
-84
-205
-Set targets
-set-target
+26
+239
+81
+272
+Set
+ifelse  AutoTarget? [AutoTarget stop] [set-target]
 T
 1
 T
@@ -744,12 +827,12 @@ NIL
 0
 
 BUTTON
-84
-172
-139
-205
+82
+239
+137
+272
 Sup
-if user-yes-or-no? \"confirm delete all targets ?\" [ask targets [die]]
+if user-yes-or-no? \"confirm delete all targets ?\" [ask targets [die] set totalTarget count Targets]
 NIL
 1
 T
@@ -761,36 +844,36 @@ NIL
 0
 
 INPUTBOX
-103
-667
-190
-733
+106
+715
+193
+781
 g_watchACar
-168190.0
+299201.0
 1
 0
 Number
 
 SLIDER
-16
-536
-192
-569
+19
+584
+195
+617
 maxEnergyLevel
 maxEnergyLevel
 0
 500
-320.0
+340.0
 10
 1
 NIL
 HORIZONTAL
 
 SLIDER
-16
-569
-192
-602
+19
+617
+195
+650
 minEnergyLevel
 minEnergyLevel
 20
@@ -802,10 +885,10 @@ NIL
 HORIZONTAL
 
 BUTTON
-21
-699
-101
-732
+24
+747
+104
+780
 Watch it
 \nif is-voiture? (voiture g_watchaCar) [\n   \n   watch voiture g_watchaCar\n   ask voiture g_watchACar [ask my-links [show-link] set size 3]\n   ask voitures [ stop-inspecting self ]\n   Inspect voiture g_watchACar\n]
 NIL
@@ -819,10 +902,10 @@ NIL
 1
 
 BUTTON
-22
-667
-101
-700
+25
+715
+104
+748
 SelectACar
 watchACar
 T
@@ -836,10 +919,10 @@ NIL
 1
 
 SWITCH
-11
-23
+24
+31
 189
-56
+64
 View-district-name?
 View-district-name?
 0
@@ -847,12 +930,12 @@ View-district-name?
 -1000
 
 BUTTON
-133
-172
-188
-205
+137
+239
+192
+272
 Show
-ask targets [let link-color grey ; scale-color blue (count my-links) 20 (totalVoiture / count targets) \n             ask links [ifelse (hidden? = true) [set color link-color show-link]\n                                                [set color link-color hide-link]\n            ]]
+ask targets [let link-color grey ; scale-color blue (count my-links) 20 (totalVoiture / count targets) \n             ask my-links [ifelse (hidden? = true) [set color link-color show-link]\n                                                   [set color link-color hide-link]\n            ]]
 NIL
 1
 T
@@ -861,7 +944,139 @@ NIL
 NIL
 NIL
 NIL
+0
+
+PLOT
+1356
+12
+1796
+222
+Cars analysing
+time
+nb cars
+0.0
+10.0
+0.0
+10.0
+true
+true
+"" ""
+PENS
+"Nb Car without energy " 1.0 0 -16777216 true "" "plot totalVoituresToDestination"
+"Nb arrived cars" 1.0 0 -7500403 true "" "plot totalVoituresPanneEnergie"
+
+TEXTBOX
+14
+186
+192
+214
+Targets
+12
+104.0
 1
+
+TEXTBOX
+17
+277
+153
+295
+Cars
+12
+104.0
+1
+
+TEXTBOX
+15
+13
+165
+31
+Init city map
+12
+104.0
+1
+
+SWITCH
+25
+205
+115
+238
+AutoTarget?
+AutoTarget?
+0
+1
+-1000
+
+BUTTON
+116
+150
+189
+183
+Commercial
+display-commercial
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+0
+
+BUTTON
+43
+117
+116
+150
+Leisure
+display-leisure
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+0
+
+BUTTON
+43
+150
+116
+183
+Working
+display-work
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+0
+
+TEXTBOX
+15
+102
+165
+120
+View area
+12
+104.0
+1
+
+MONITOR
+117
+193
+193
+238
+Nb Target
+totalTarget
+17
+1
+11
 
 @#$#@#$#@
 ## WHAT IS IT?
@@ -1236,7 +1451,42 @@ Polygon -7500403 true true 30 75 75 30 270 225 225 270
 NetLogo 6.0.2
 @#$#@#$#@
 @#$#@#$#@
+1.0
+    org.nlogo.sdm.gui.AggregateDrawing 1
+        org.nlogo.sdm.gui.ConverterFigure "attributes" "attributes" 1 "FillColor" "Color" 130 188 183 151 165 50 50
+            org.nlogo.sdm.gui.WrappedConverter "" ""
 @#$#@#$#@
+<experiments>
+  <experiment name="experiment" repetitions="1" runMetricsEveryStep="true">
+    <setup>setup</setup>
+    <go>go</go>
+    <metric>count turtles</metric>
+    <enumeratedValueSet variable="View-district-name?">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="maxEnergyLevel">
+      <value value="320"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="g_watchACar">
+      <value value="581291"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="debug?">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="minEnergyLevel">
+      <value value="120"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="max-visibility">
+      <value value="2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="AutoTarget?">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="pourcentageElectrique">
+      <value value="1"/>
+    </enumeratedValueSet>
+  </experiment>
+</experiments>
 @#$#@#$#@
 @#$#@#$#@
 default
