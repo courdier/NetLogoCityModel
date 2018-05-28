@@ -39,7 +39,6 @@ globals [
   LeBrule
   versOuest
   current-quartier
-  totalTarget
 ]
 
 ;---Définition des classes d'agents------------------------
@@ -91,7 +90,6 @@ to setup
   set totalVoituresPanneEnergie 0
   set totalVoituresToDestination 0
   set pourcentageElectrique 1
-  set totalTarget 0
   ask patches [
     set pcolor white
     set road? false
@@ -121,7 +119,6 @@ to setup
   ; on constrruit une cible virtuelle au centre villle au cas ou l'utilisateur n'en definisse aucune par l'interface de l'application
   let P one-of patches with [quartier = "CENTRE-VILLE"];
   create-targets 1  [setxy ([pxcor] of p) ([pycor] of p) set is-default? true set color red set size 2 set shape "target"] ; creation d'une cible initiale de destination pour les voitures
-  set totalTarget 1
 
   set LastvisitedTarget nobody
   ask turtles [ stop-inspecting self ]
@@ -466,6 +463,11 @@ to set-target
            set nbcars_arrived_to_this_target 0
            set hidden? false
            set LastvisitedTarget node
+           clear-output
+           output-type "New target created at : "
+           output-type xcor
+           output-type "-"
+           output-print ycor
       ]]
       if node = LastvisitedTarget and node != nobody [
         ask node [ ask my-links [hide-link]]
@@ -488,11 +490,9 @@ end
 
 to Autotarget
   ask targets [die]
-  set totalTarget 0
 
   foreach gis:feature-list-of dataset_work [ vector-feature ->
       let centroid gis:location-of gis:centroid-of vector-feature
-      set totalTarget totalTarget + 1
       ; centroid will be an empty list if it lies outside the bounds
       ; of the current NetLogo world, as defined by our current GIS
       ; coordinate transformation
@@ -513,7 +513,6 @@ to Autotarget
 
   foreach gis:feature-list-of dataset_leisure [ vector-feature ->
       let centroid gis:location-of gis:centroid-of vector-feature
-      set totalTarget totalTarget + 1
       ; centroid will be an empty list if it lies outside the bounds
       ; of the current NetLogo world, as defined by our current GIS
       ; coordinate transformation
@@ -535,7 +534,6 @@ to Autotarget
 
  foreach gis:feature-list-of dataset_commercial [ vector-feature ->
       let centroid gis:location-of gis:centroid-of vector-feature
-      set totalTarget totalTarget + 1
       ; centroid will be an empty list if it lies outside the bounds
       ; of the current NetLogo world, as defined by our current GIS
       ; coordinate transformation
@@ -623,7 +621,7 @@ BUTTON
 188
 98
 1. Clear and setup
-setup
+setup\nclear-output\noutput-type totalQuartier output-print \" : districts created\"\noutput-type totalRoute output-print \" : roads created\" 
 NIL
 1
 T
@@ -640,7 +638,7 @@ BUTTON
 189
 150
 Living
-display-habitations
+display-habitations\nclear-output\noutput-type totalHabitation output-print \" : Living places created\" 
 NIL
 1
 T
@@ -770,7 +768,7 @@ BUTTON
 88
 326
 Create
-reset-ticks\ndisplay-cars\n
+reset-ticks\ndisplay-cars\nclear-output\noutput-type count Voitures\noutput-print \" : Cars created\"\n
 NIL
 1
 T
@@ -787,7 +785,7 @@ BUTTON
 193
 326
 Sup not elec. cars
-SupNotElect
+SupNotElect\nclear-output\noutput-type count Voitures\noutput-print \" Electric cars\"
 NIL
 1
 T
@@ -815,7 +813,7 @@ BUTTON
 81
 272
 Set
-ifelse  AutoTarget? [AutoTarget stop] [set-target]
+ifelse  AutoTarget? \n  [AutoTarget \n   stop\n   clear-output\n   output-type count Targets\n   output-print \" : Target places created\"]\n  [set-target]\n\n
 T
 1
 T
@@ -832,7 +830,7 @@ BUTTON
 137
 272
 Sup
-if user-yes-or-no? \"confirm delete all targets ?\" [ask targets [die] set totalTarget count Targets]
+if user-yes-or-no? \"confirm delete all targets ?\" [\n   ask targets [die]\n   clear-output\n   output-print \"Targets deleted\" \n]
 NIL
 1
 T
@@ -962,8 +960,8 @@ true
 true
 "" ""
 PENS
-"Nb Car without energy " 1.0 0 -16777216 true "" "plot totalVoituresToDestination"
-"Nb arrived cars" 1.0 0 -7500403 true "" "plot totalVoituresPanneEnergie"
+"Nb Car without energy " 1.0 0 -2674135 true "" "plot count voitures with [energyLevel <= 0 ]"
+"Nb arrived cars" 1.0 0 -12087248 true "" "plot count voitures with [isarrived?]"
 
 TEXTBOX
 14
@@ -1012,7 +1010,7 @@ BUTTON
 189
 183
 Commercial
-display-commercial
+display-commercial\nclear-output\noutput-type totalCommercial output-print \" : Commercial area created\" 
 NIL
 1
 T
@@ -1029,7 +1027,7 @@ BUTTON
 116
 150
 Leisure
-display-leisure
+display-leisure\nclear-output\noutput-type totalLeisure output-print \" : Leisure area created\" 
 NIL
 1
 T
@@ -1046,7 +1044,7 @@ BUTTON
 116
 183
 Working
-display-work
+display-work\nclear-output\noutput-type totalWork output-print \" : Working area created\" 
 NIL
 1
 T
@@ -1073,9 +1071,16 @@ MONITOR
 193
 238
 Nb Target
-totalTarget
+Count Targets
 17
 1
+11
+
+OUTPUT
+215
+15
+455
+69
 11
 
 @#$#@#$#@
