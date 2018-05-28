@@ -72,6 +72,7 @@ to setup
   clear-all
 
   ; point de passage intermédiare
+  ; A corriger ces points doivent etre repris par les shapefile pour etre plus précis et independant des "setting" @RC_TODO
   set barachois list 12 65
   set bdSud list 10 52
   set montagne list -4 56
