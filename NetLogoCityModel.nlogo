@@ -133,6 +133,7 @@ end  ;==========================================================================
 ;==================================================================================================
 to go
   ; animer ici l'activité de mobilité des habitants
+  if (ticks = 0) [clear-all-plots]
   let liste_voitures_non_arrivees voitures with [ isElectric? and not isArrived?]
   ifelse any? liste_voitures_non_arrivees
     [ ask voitures with [ isElectric? and not isArrived? and energylevel != -1] [drive]
@@ -175,7 +176,7 @@ end ; --------------------------------------------------------------------------
 
 ; PROCEDURE : CONSUME
 to consume
-       set energyLevel energyLevel - .1 ; @RC TODO simpliste à retravailler
+       set energyLevel energyLevel - .5 ; @RC TODO simpliste à retravailler
        if energylevel < 0 [set energylevel 0]
                           if (debug? and who = g_watchACar) [set label int energylevel] ; @RC DEBUG ***
        set color scale-color red energylevel minEnergyLevel (maxEnergyLevel / 6)
@@ -394,6 +395,7 @@ to display-work
 end
 
 to display-cars
+  ask voitures [die]
   foreach gis:feature-list-of dataset_habitation [ vector-feature ->
       let centroid gis:location-of gis:centroid-of vector-feature
       let nbVoitures gis:property-value vector-feature "VOITURE"
@@ -860,9 +862,9 @@ SLIDER
 617
 maxEnergyLevel
 maxEnergyLevel
-0
-500
-340.0
+20
+100
+50.0
 10
 1
 NIL
@@ -875,9 +877,9 @@ SLIDER
 650
 minEnergyLevel
 minEnergyLevel
-20
-500
-120.0
+0
+100
+10.0
 10
 1
 NIL
