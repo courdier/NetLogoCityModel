@@ -77,7 +77,7 @@ patches-own
 ;==================================================================================================
 to setup
   ;remise à zero
-  __clear-all-and-reset-ticks
+  __clear-all-and-reset-
 
   ; point de passage intermédiare
   ; A corriger ces points doivent etre repris par les shapefile pour etre plus précis et independant des "setting" @RC_TODO
@@ -119,6 +119,9 @@ to setup
                                                 (gis:envelope-of dataset_leisure)
                                                 (gis:envelope-of dataset_work)
                                                 (gis:envelope-of dataset_habitation))
+
+
+
   display-city-districts
   display-routes
 
@@ -129,6 +132,8 @@ to setup
   set LastvisitedTarget nobody
   ask turtles [ stop-inspecting self ]
 
+  ; initialisation du séquenceur agents
+  reset-ticks
 end  ;=============================================================================================
 
 ;==================================================================================================
