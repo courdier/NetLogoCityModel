@@ -1,6 +1,6 @@
 ;=================================================================================================
 ; Urban simulation program for the town of Saint-Denis, Réunion Island
-; Version 0.5
+; Version 0.6
 ;==================================================================================================
 
 ;---Déclaration des librairies d'extension au langage----
