@@ -182,7 +182,7 @@ to consume
        set energyLevel energyLevel - .5 ; @RC TODO simpliste à retravailler
        if energylevel < 0 [set energylevel 0]
                           if (debug? and who = g_watchACar) [set label int energylevel] ; @RC DEBUG ***
-       set color scale-color red energylevel minEnergyLevel (maxEnergyLevel / 6)
+       ;set color scale-color red energylevel minEnergyLevel (maxEnergyLevel / 6)
 end
 
 ; PROCEDURE : NEXT-DIRECTION -----------------------------------------------------------------
@@ -740,7 +740,7 @@ max-visibility
 max-visibility
 1
 10
-1.5
+4.5
 .5
 1
 NIL
@@ -853,7 +853,7 @@ INPUTBOX
 193
 781
 g_watchACar
-299201.0
+8092.0
 1
 0
 Number
@@ -867,7 +867,7 @@ maxEnergyLevel
 maxEnergyLevel
 20
 100
-50.0
+100.0
 10
 1
 NIL
@@ -882,7 +882,7 @@ minEnergyLevel
 minEnergyLevel
 0
 100
-10.0
+100.0
 10
 1
 NIL
