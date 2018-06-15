@@ -1,6 +1,6 @@
 ;=================================================================================================
 ; Urban simulation program for the town of Saint-Denis, Réunion Island
-; Version 0.6
+; Version 0.8
 ;==================================================================================================
 
 ;---Déclaration des librairies d'extension au langage----
@@ -333,7 +333,6 @@ to evaluate-pollution
     set pollution pollution / pollution-dispersion
   ]
 
-  let show-poll true
   if show-poll = true [show-pollution]
 
   ;;set mean-poll mean [pollution] of patches
@@ -777,7 +776,7 @@ max-visibility
 max-visibility
 1
 10
-4.5
+1.5
 .5
 1
 NIL
@@ -890,7 +889,7 @@ INPUTBOX
 193
 781
 g_watchACar
-8092.0
+227753.0
 1
 0
 Number
@@ -919,7 +918,7 @@ minEnergyLevel
 minEnergyLevel
 0
 100
-100.0
+60.0
 10
 1
 NIL
@@ -1043,7 +1042,7 @@ SWITCH
 238
 AutoTarget?
 AutoTarget?
-1
+0
 1
 -1000
 
@@ -1125,6 +1124,17 @@ OUTPUT
 455
 69
 11
+
+SWITCH
+1363
+237
+1482
+270
+Show-poll
+Show-poll
+1
+1
+-1000
 
 @#$#@#$#@
 ## WHAT IS IT?
