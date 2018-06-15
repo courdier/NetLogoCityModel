@@ -52,7 +52,7 @@ voitures-own [
   isElectric?     ;; FALSE classic, TRUE Electric
   isArrived?      ;; True if the car is at is target
   energyLevel     ;; from minEnergyLelev to maxEnergyLevel
-  pollutionLevel  ;; Defined by the of vehicule
+  pollutionLevel  ;; Defined by the type of vehicule
 ]
 breed [ targets target ]
 targets-own [
@@ -145,6 +145,7 @@ to go
     [ ; si toutes les voitures sont arrivées alors stopper
       stop
     ]
+  evaluate-pollution
 end ;===============================================================================================
 
 ; PROCEDURE : DRIVE
@@ -315,6 +316,41 @@ to-report peut-avancer? [next-selected-patch]
     [report false]
 end
 
+;PROCEDURE  EVALUATE-POLLUTION
+;
+to evaluate-pollution
+
+  let pollution-mean 2.4
+  let pollution-deviation 0.6
+  let pollution-dispersion 1.05
+
+  diffuse pollution 0.7
+
+  ask patches
+  [
+    ; set pollution pollution  + abs ( random-normal (length car-list-memory * pollution-mean) (length car-list-memory * pollution-deviation) )
+    set pollution abs ( random-normal (length car-list-memory * pollution-mean) (length car-list-memory * pollution-deviation) )
+    set pollution pollution / pollution-dispersion
+  ]
+
+  let show-poll true
+  if show-poll = true [show-pollution]
+
+  ;;set mean-poll mean [pollution] of patches
+
+  ;;set-current-plot "Average Pollution"
+  ;;set-current-plot-pen "mean-poll"
+  ;;plot mean-poll
+
+end
+
+to show-pollution
+  ask patches
+  [
+    if (pollution >= 0)
+    [set pcolor 10 + pollution * 2 / 3]
+  ]
+end
 
 ;=================================================================================
 ; Affichage des iformation issues des shapefile
@@ -421,6 +457,7 @@ to display-cars
             set isElectric? FALSE
             set isArrived? FALSE
             set color white - 3
+            set pollutionLevel 1 ;; @TODO manage pollutionLevel more precisely
             set xcor round (item 0 centroid)
             set ycor round (item 1 centroid)
           ]
@@ -819,7 +856,7 @@ BUTTON
 81
 272
 Set
-ifelse  AutoTarget? \n  [AutoTarget \n   stop\n   clear-output\n   output-type count Targets\n   output-print \" : Target places created\"]\n  [set-target]\n\n
+ifelse  AutoTarget? \n  [AutoTarget \n   clear-output\n   output-type count Targets\n   output-print \" : Target places created\"\n   stop\n  ]\n  [set-target]\n\n\n\n
 T
 1
 T
@@ -1006,7 +1043,7 @@ SWITCH
 238
 AutoTarget?
 AutoTarget?
-0
+1
 1
 -1000
 
